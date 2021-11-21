@@ -1,25 +1,9 @@
-# This is a sample Python script.
-
-# Press Umschalt+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-
 import nltk
 import math
 from nltk import ngrams
 from nltk.tokenize import RegexpTokenizer
+import operator
 
-
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-
-
-# Example function
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Strg+F8 to toggle the breakpoint.
-
-
-# Read text file and make ONE string out of it (readline for one line as string, readlines for list of strings)
 def read_file(filepath) -> str:
     with open(filepath, 'r', encoding='utf-8') as file:
         content = file.read()
@@ -30,94 +14,74 @@ def binom(k, n, p) -> float:
     return math.pow(p, k) * math.pow((1 - p), n - k)
 
 
+def binom_part1(k, n, p) -> float:
+    if p == 0:
+        return 0
+    return k * math.log(p)
+
+
+def binom_part2(k, n, p) -> float:
+    if p == 1:
+        return 0
+    return (n-k) * math.log(1-p)
+
+
 def log_lambda(n, c12, c123, c3, p, p1, p2) -> float:
-    # if(n == 0 or c12 == 0 or c2 == 0 or c3 == 0 or p == 0 or p1 == 0 or p2 == 0):
-    #     return 0
-
-    b1 = binom(c123, c12, p)
-    b2 = binom(c3 - c123, n - c12, p)
-    b3 = binom(c123, c12, p1)
-    b4 = binom(c3 - c123, n - c12, p2)
-    log1 = 0
-    if b1 != 0:
-        log1 = math.log(b1)
-    log2 = 0
-    if b2 != 0:
-        log2 = math.log(b2)
-    log3 = 0
-    if b3 != 0:
-        log3 = math.log(b3)
-    log4 = 0
-    if b4 != 0:
-        log4 = math.log(b4)
-
-    return log1 + log2 - log3 - log4
+    b11 = binom_part1(c123, c12, p)
+    b12 = binom_part2(c123, c12, p)
+    b21 = binom_part1(c3 - c123, n - c12, p)
+    b22 = binom_part2(c3 - c123, n - c12, p)
+    b31 = binom_part1(c123, c12, p1)
+    b32 = binom_part2(c123, c12, p1)
+    b41 = binom_part1(c3 - c123, n - c12, p2)
+    b42 = binom_part2(c3 - c123, n - c12, p2)
+    return (b11 + b12) + (b21 + b22) - (b31 + b32) - (b41 + b42)
 
 
-# Press the green button in the guter to run the script.
+# Main method
 if __name__ == '__main__':
-    print_hi('PyCharm')
 
     # Read file
-    example_text = read_file('static_idioms.txt')
-    example_text = example_text.lower() # all words to lower case
-    # print(example_text)
-    stopwords = read_file('stopwords.txt')
+    example_text = read_file('static_idioms.txt').lower()
+    stopwords = read_file('stopwords.txt').splitlines()
 
     # Tokenize text
-    tokenizer = RegexpTokenizer(r'\w+')
-    token = tokenizer.tokenize(example_text)
-    # token = nltk.word_tokenize(example_text)
+    token = RegexpTokenizer(r"\w+").tokenize(example_text)
 
     # Filter stopwords
     filtered_words = [w for w in token if not w.lower() in stopwords]
 
-    # Remove some silly characters
+    # Remove some silly characters # Would be more efficient with regex
     for w in filtered_words:
         try:
+            if 'é' in w or 'è' in w or 'ö' in w or 'ä' in w or 'ü' in w or 'â' in w or 'ê' in w or 'ô' in w:
+                filtered_words.remove(w)
+                continue
             val = int(w)
             filtered_words.remove(w)
         except ValueError:
             continue
-    #print(filtered_words)
 
-    # Make list of bigrams
+    # Make lists of bigrams and trigrams
     bigrams = nltk.bigrams(filtered_words)
-
-    # Make list of trigrams
     trigrams = list(ngrams(filtered_words, 3))
-    # print(trigrams)
-    # frequence = nltk.FreqDist(trigrams)
-    # for key, value in frequence.items():
-    #     print(key, value)
 
     # Count all words
     wordcount = len(filtered_words)
-    print(wordcount)
 
-    # Make a Dict for each word
+    # Make a dict for each word
     wordmap = {}
     for w in filtered_words:
         wordmap[w] = 0
 
-    # Count each word
+    # Count words, bigrams, trigrams
     for w in filtered_words:
         if w.__eq__(w):
             wordmap[w] = wordmap.get(w) + 1
-
-    #print(wordmap)
-
-    # Count bigrams
     frequence_bigrams = nltk.FreqDist(bigrams)
-    #for key, value in frequence_bigrams.items():
-        #print(key, value)
-        #print(type(key))
-
-    # Count trigrams
     frequence_trigrams = nltk.FreqDist(trigrams)
 
-    f = open("result.txt", "a", encoding='utf-8')
-    f.truncate(0)
+    dic = {'empty': 0}
     # Calc Ps
     for t in trigrams:
         c1 = wordmap.get(t[0])
@@ -128,10 +92,19 @@ if __name__ == '__main__':
         c123 = frequence_trigrams.get(t)
         p = c3 / wordcount
         p1 = c123 / c12
-        p2 = (c3 - c123) / (wordcount - c12)
+        p2 = (c3 - c123) / (wordcount - 1 - c12)
         log_end = -2 * log_lambda(wordcount, c12, c123, c3, p, p1, p2)
-        f.write(t.__str__() + ',' + '(' + log_end.__str__() + ', ' + c1.__str__() + ', ' + c2.__str__() + ', ' + c3.__str__() + ')')
-        print(t.__str__() + ',' + '(' + log_end.__str__() + ', ' + c1.__str__() + ', ' + c2.__str__() + ', ' + c3.__str__() + ')')
+        value = log_end
 
-    f.close()
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+        key = t.__str__() + ',' + '(' + log_end.__str__() + ', ' + c12.__str__() + ', ' + c3.__str__() + ', ' + c123.__str__() + ')'
+        dic.update({key: value})
+
+    sorted_d = dict(sorted(dic.items(), key=operator.itemgetter(1), reverse=True))
+
+    # Print best 20
+    counter = 0
+    for item in sorted_d:
+        if counter > 19:
+            break
+        print(item)
+        counter = counter + 1

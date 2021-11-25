@@ -3,6 +3,8 @@ import math
 from nltk import ngrams
 from nltk.tokenize import RegexpTokenizer
 import operator
+import argparse
+
 
 def read_file(filepath) -> str:
     with open(filepath, 'r', encoding='utf-8') as file:
@@ -41,8 +43,15 @@ def log_lambda(n, c12, c123, c3, p, p1, p2) -> float:
 # Main method
 if __name__ == '__main__':
 
+    # Add parser to read command line arguments
+    parser = argparse.ArgumentParser(description='Create the 20 most likely Trigrams from a given text file.')
+    parser.add_argument('textfile', metavar='TEXTFILE', type=str,
+                        help='Path to a txt file containing the text to parse to Trigrams.')
+    args = parser.parse_args()
+
     # Read file
-    example_text = read_file('static_idioms.txt').lower()
+    example_text = read_file(args.textfile).lower()
+    # example_text = read_file('static_idioms.txt').lower()
     stopwords = read_file('stopwords.txt').splitlines()
 
     # Tokenize text
@@ -82,7 +91,7 @@ if __name__ == '__main__':
     frequence_trigrams = nltk.FreqDist(trigrams)
 
     dic = {'empty': 0}
-    # Calc Ps
+    # Calculate likelihood for every trigram
     for t in trigrams:
         c1 = wordmap.get(t[0])
         c2 = wordmap.get(t[1])
@@ -94,11 +103,13 @@ if __name__ == '__main__':
         p1 = c123 / c12
         p2 = (c3 - c123) / (wordcount - 1 - c12)
         log_end = -2 * log_lambda(wordcount, c12, c123, c3, p, p1, p2)
-        value = log_end
 
+        # Store score as value and the print statement as key
+        value = log_end
         key = t.__str__() + ',' + '(' + log_end.__str__() + ', ' + c12.__str__() + ', ' + c3.__str__() + ', ' + c123.__str__() + ')'
         dic.update({key: value})
 
+    # Sort the dictionary by score(value)
     sorted_d = dict(sorted(dic.items(), key=operator.itemgetter(1), reverse=True))
 
     # Print best 20

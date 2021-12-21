@@ -20,74 +20,47 @@ def read_file_lines(filepath):
 if __name__ == '__main__':
     print("Hi from Markov :)")
 
-    example = read_file("example_text.txt")
-    print(example)
-
-    # Alternative
-    example02 = read_file_lines("example_text.txt")
-    # map = {}  # word token
-    # map2 = {}  # token word
-    isStartToken = True
+    print("Example Text: \n" + read_file("example_text.txt"))
+    example = read_file_lines("example_text.txt")
+    isStartTag = True
     # aPriori Score
-    aPriori: DefaultDict[str, Union[float, int]] = defaultdict(int)  # maybe without default init
-    valuesSet = set()
+    aPriori: DefaultDict[str, Union[float, int]] = defaultdict(int)
+    # Set with all different tags
+    tagSet = set()
     # Node Scores
     nodeScore: DefaultDict[str, DefaultDict[str, Union[float, int]]] = defaultdict(lambda: defaultdict(int))
 
-    for line in example02:
+    for line in example:
         if line.isspace():
-            isStartToken = True  # leerzeile -> neuer Satz
+            isStartTag = True  # empty line -> new sentence
         else:
-            (word, token) = line.strip().split(" ")
-            nodeScore[token][word] += 1
-            valuesSet.add(token)
-            if isStartToken:
-                aPriori[token] += 1
-                isStartToken = False
-
-    print(map)
+            (word, tag) = line.strip().split(" ")
+            nodeScore[tag][word] += 1
+            tagSet.add(tag)
+            if isStartTag:
+                aPriori[tag] += 1
+                isStartTag = False
 
     # aPriori Score with Probability
-    for v in valuesSet:
-        aPriori[v] += 1
+    for t in tagSet:
+        aPriori[t] += 1
 
+    print("APriori with values: ")
     print(aPriori)
     total = sum(aPriori.values())
     aPrioriPercentage = aPriori.copy()
     for o in aPrioriPercentage:
         aPrioriPercentage[o] = aPrioriPercentage[o] / total
+    print("APriori with percentages: ")
     print(aPrioriPercentage)
 
     # Node Score with Probability
+    print("NodeScore with values: ")
     print(nodeScore)
     nodeScorePercentage = nodeScore.copy()
-    for token in nodeScorePercentage:
-        total = sum(nodeScorePercentage[token].values())
-        for word in nodeScorePercentage[token]:
-            nodeScorePercentage[token][word] /= total
-
+    for tag in nodeScorePercentage:
+        total = sum(nodeScorePercentage[tag].values())
+        for word in nodeScorePercentage[tag]:
+            nodeScorePercentage[tag][word] /= total
+    print("NodeScore with percentages: ")
     print(nodeScorePercentage)
-
-    # Tokenize text
-    # token = RegexpTokenizer(r"\w+-?’?\w*|[\.,]").tokenize(example)
-    #
-    # keys = []
-    # values = []
-    # split = True
-    # for w in token:
-    #     print(w)
-    #     if split:
-    #         keys.append(w)  # every odd word count is a key
-    #         split = False
-    #     else:
-    #         values.append(w)  # every just word count is a value
-    #         split = True
-
-    # for k in keys:
-    #     print(k)
-
-    # for v in values:
-    #     print(v)
-
-    # wordmap = dict(zip(keys, values))
-    # print(wordmap)

@@ -1,98 +1,45 @@
-import nltk
-from nltk.tokenize import RegexpTokenizer
+import os
 from typing import List, Any, Union, DefaultDict
 from collections import defaultdict
 import numpy as np
+from tqdm import tqdm
+import json
+from zipfile import ZipFile, ZIP_DEFLATED
+import argparse
 
 
-def read_file(filepath) -> str:
-    with open(filepath, 'r', encoding='utf-8') as file:
-        content = file.read()
-    return content
+def trainmodel(trainingdatafilepath: str, zipfilepath: str):
+    # ----------TRAIN MODEL--------------------------------------------
+    # Training data
+    text = read_file_lines(trainingdatafilepath)
 
+    # All Sentences as List of words with their tag or empty line
+    sentences = create_sentence_list(text)
 
-def read_file_lines(filepath):
-    with open(filepath, 'r', encoding='utf-8') as file:
-        content = file.readlines()
-    return content
-
-# sentence ['a', 'Idion']
-def viterbi(sentence, tag_list, word_probs, transition_probs, aPrioriPercentage) -> float:
-    viterbi_mat = [[0] * len(sentence) for i in range(len(tag_list))]
-    #for a in range(len(sentence)):
-       # for t in tag_list:
-          #  if sentence[a][1] == t:
-               # aPrioriPercentage
-        #viterbi_mat[0][a] = 0
-    for i in range(len(tag_list)):
-        for j in range(len(sentence)):
-            viterbi_mat[i][j] = 1  # max() #word prob#
-
-    print(viterbi_mat)
-    return 0
-
-
-# Main method
-if __name__ == '__main__':
-    print("Hi from Markov :)")
-
-    #print("Example Text: \n" + read_file("example_text.txt"))
-
-    # text = read_file_lines("example_text.txt")
-    text = read_file_lines("BIOformal.txt")
-    isStartTag = True
-    # aPriori Score
-    aPriori: DefaultDict[str, Union[float, int]] = defaultdict(int)
     # Set with all different tags
-    tagSet = set()
-    # Node Scores
-    nodeScore: DefaultDict[str, DefaultDict[str, Union[float, int]]] = defaultdict(lambda: defaultdict(int))
+    tag_set = create_tag_set(text)
+    # List with the different!! tags
+    tag_list = create_tag_list(tag_set)
 
-    sentences = []
-    sentence = []
-    sentence_count = 0
-    for line in text:
-        if line.isspace():
-            isStartTag = True  # empty line -> new sentence
-            sentences.append(sentence)
-            sentence_count = sentence_count + 1
-            sentence = []
-        else:
-            (word, tag) = line.strip().split(" ")
-            sentence.append([word, tag])  # word, tag
-            nodeScore[tag][word] += 1
-            tagSet.add(tag)
-            if isStartTag:
-                aPriori[tag] += 1
-                isStartTag = False
-            if text.index(line) == len(text) - 1:
-                sentences.append(sentence)
-                sentence_count = sentence_count + 1
-                sentence = []
+    # aPriori Score
+    apriori_scores = calculate_a_priori_probability(text)
+    print("APriori with percentages: ")
+    print(apriori_scores)
 
-    # aPriori Score with Probability
-    for t in tagSet:
-        aPriori[t] += 1
-
-    # print("APriori with values: ")
-    # print(aPriori)
-    total = sum(aPriori.values())
-    aPrioriPercentage = aPriori.copy()
-    for o in aPrioriPercentage:
-        aPrioriPercentage[o] = aPrioriPercentage[o] / total
-    # print("APriori with percentages: ")
-    # print(aPrioriPercentage)
+    # WordCount of training data
+    wordcount = calculate_word_count(text)
 
     # Node Score with Probability
-    # print("NodeScore with values: ")
-    # print(nodeScore)
-    nodeScorePercentage = nodeScore.copy()
-    for tag in nodeScorePercentage:
-        total = sum(nodeScorePercentage[tag].values())
-        for word in nodeScorePercentage[tag]:
-            nodeScorePercentage[tag][word] /= total
+    node_scores = calculate_node_scores_probability(text)
     # print("NodeScore with percentages: ")
     # print(nodeScorePercentage)
+
+    print("The different Tags: ")
+    print(tag_list)
+
+    transition_scores = calculate_transition_scores(tag_list, sentences)
+    print("Here go the transitions: ")
+    print(transition_scores)
 
     # transition probabilities
     #       O   C   B   I
@@ -101,13 +48,156 @@ if __name__ == '__main__':
     # B     20  21  22  23
     # I     30  31  32  33
 
+    for i in range(0, len(transition_scores)):
+        print(tag_list[i])
+        for j in range(0, len(transition_scores[i])):
+            print(transition_scores[i][j])
+
+    # Dump files
+    model_dictionary = {
+        "tag_list": tag_list,
+        "apriori": apriori_scores,
+        "node_scores": node_scores,
+        "transition_scores": transition_scores,
+        "word_count": wordcount
+    }
+
+    open("model.json", "w").close()
+    with open("model.json", 'w') as file_object:
+        json.dump(model_dictionary, file_object, indent=1)
+
+    # create a ZipFile object
+    zipObj = ZipFile(zipfilepath, 'w', compression=ZIP_DEFLATED)
+    zipObj.write('model.json')
+    zipObj.close()
+
+    os.remove("model.json")
+
+
+def read_file(filepath)\
+        -> str:
+    with open(filepath, 'r', encoding='utf-8') as file:
+        content = file.read()
+    return content
+
+
+def read_file_lines(filepath)\
+        -> List[str]:
+    with open(filepath, 'r', encoding='utf-8') as file:
+        content = file.readlines()
+    return content
+
+
+def create_sentence_list(text: List[str])\
+        -> List[List[list]]:
+    sentences_list = []
+    sentence = []
+    print("\nCreating list of sentences with (word,tag) pair")
+    for line in tqdm(text):
+        if line.isspace():
+            sentences_list.append(sentence)
+            sentence = []
+        else:
+            (word, tag) = line.strip().split(" ")
+            sentence.append([word.lower(), tag])  # word, tag
+            if text.index(line) == len(text) - 1:
+                sentences_list.append(sentence)
+                sentence = []
+    return sentences_list
+
+
+def create_tag_set(text: List[str])\
+        -> set:
+    tag_set = set()
+    for line in text:
+        if line.isspace():
+            pass
+        else:
+            (word, tag) = line.strip().split(" ")
+            tag_set.add(tag)
+    return tag_set
+
+
+def create_tag_list(tag_set: set) \
+        -> List[str]:
     tag_list = []  # set is an unordered collection.
-    for t in tagSet:
+    for t in tag_set:
         tag_list.append(t)
+    return tag_list
 
-    transition_tags = [[0] * len(tagSet) for i in range(len(tagSet))]
 
-    for s in sentences:
+def calculate_word_count(text: List[str])\
+        -> int:
+    word_count = 0
+    known_words = []
+    for line in text:
+        if line.isspace():
+            pass
+        else:
+            (word, tag) = line.strip().split(" ")
+            if word.lower() not in known_words:
+                known_words.append(word.lower())
+                word_count += 1
+    return word_count
+
+
+def calculate_a_priori_probability(text: List[str])\
+        -> DefaultDict[str, Union[float, int]]:
+    # Set with all different tags
+    tag_set = set()
+    a_priori: DefaultDict[str, Union[float, int]] = defaultdict(int)
+    is_start_tag = True
+
+    for line in text:
+        if line.isspace():
+            is_start_tag = True
+        else:
+            (word, tag) = line.strip().split(" ")
+            tag_set.add(tag)
+            if is_start_tag:
+                a_priori[tag] += 1
+                is_start_tag = False
+
+    # aPriori add-one-smoothing
+    for t in tag_set:
+        a_priori[t] += 1
+
+    total_values = sum(a_priori.values())
+    a_priori_percentage = a_priori.copy()
+    for o in a_priori_percentage:
+        a_priori_percentage[o] = a_priori_percentage[o] / total_values
+
+    return a_priori_percentage
+
+
+def calculate_node_scores_probability(text: List[str])\
+        -> DefaultDict[str, DefaultDict[str, Union[float, int]]]:
+    # Node Scores
+    node_score: DefaultDict[str, DefaultDict[str, Union[float, int]]] = defaultdict(lambda: defaultdict(int))
+
+    print("Calculating Node Scores")
+    for line in text:
+        if line.isspace():
+            pass
+        else:
+            (word, tag) = line.strip().split(" ")
+            node_score[tag][word.lower()] += 1
+
+    node_score_percentage = node_score.copy()
+    for tag in node_score_percentage:
+        total_value = sum(node_score_percentage[tag].values())
+        for word in node_score_percentage[tag]:
+            node_score_percentage[tag][word] /= total_value
+
+    return node_score_percentage
+
+
+def calculate_transition_scores(tag_list: List[str], sentence_list: List[List[list]])\
+        -> List[List[int]]:
+    # Calculate +1 to transitions not seen before!
+    transition_tags = [[1] * len(tag_list) for i in range(len(tag_list))]
+
+    for s in sentence_list:
         for w in range(0, len(s) - 1):
             matrix_index_from = -1
             matrix_index_to = -1
@@ -128,62 +218,127 @@ if __name__ == '__main__':
         for u in range(0, len(transition_tags[t])):
             transition_tags[t][u] = transition_tags[t][u] / sum_trans
 
-    print(transition_tags)
+    return transition_tags
 
-    # viterbi mattric
-    #       This   is   a   sentence    .
-    # O     00     01   02  03          04
-    # C     10     11   12  13          14
-    # B     20     21   22  23          24
-    # I     30     31   32  33          34
 
-    sentence = sentences[0]
-    viterbi_mat = [[0] * len(sentence) for i in range(len(tag_list))]
-    best_track = [] # sequence with tags
+def classify(sentence: str, tag_list: List[str], node_scores: DefaultDict[str, DefaultDict[str, Union[float, int]]],
+             transition_scores: List[List[int]], apriori_scores: DefaultDict[str, Union[float, int]], word_count: int):
+    # ----------HMM AND VITERBI--------------------------------------------
+    # viterbi matrix with index from where value came from
+    #       This    is      a       sentence    .
+    # O     00, 0   01, 0   02, 0   03, 0       04, 0
+    # C     10, 0   11, 0   12, 0   13, 0       14, 0
+    # B     20, 0   21, 0   22, 0   23, 0       24, 0
+    # I     30, 0   31, 0   32, 0   33, 0       34, 0
 
-    print(sentence[0][0])
+    # An example sentence to calculate viterbi on
+    # sentence = "The sound was music to her ears ."
+    sentence.lower()
+    sentence = sentence.split(" ")
+
+    # Viterbi Matrix
+    viterbi_matrix = calculate_viterbi_matrix(sentence, tag_list, node_scores, transition_scores, apriori_scores, word_count)
+
+    # The most probable tag combination of the given sentence
+    best_track = calculate_best_tag_combination(sentence, tag_list, viterbi_matrix)
+
+    # Calculate Viterbi Score
+    viterbi_score = calculate_viterbi_score(viterbi_matrix, tag_list, sentence)
+
+    print("Reference: " + sentence.__str__())
+    print("Our Solution: " + best_track.__str__())
+    print("Our max_prob: " + viterbi_score.__str__())
+
+
+def calculate_viterbi_matrix(sentence: List[str], tag_list: List[str], node_scores: DefaultDict[str, DefaultDict[str, Union[float, int]]],
+                             transition_scores: List[List[int]], apriori_scores: DefaultDict[str, Union[float, int]], word_count: int)\
+        -> List[List[List[int]]]:
+    viterbi_matrix = [[[0, 0]] * len(sentence) for i in range(len(tag_list))]
+
+    # Viterbi Score for first word
     for t in range(len(tag_list)):
-        viterbi_mat[t][0] = aPrioriPercentage.get(tag_list[t])
-        node_score = nodeScorePercentage.get(tag_list[t]).get(sentence[0][0])
+        node_score = node_scores.get(tag_list[t]).get(sentence[0])
         if node_score is None:
-            node_score = 1
-        viterbi_mat[t][0] = np.log(aPrioriPercentage.get(tag_list[t])) + np.log(node_score) # plus or what or log or foo
+            node_score = 1 / (1 + word_count)
+        viterbi_matrix[t][0] = [np.log(apriori_scores.get(tag_list[t])) + np.log(node_score), -1]
 
-    for i in range(len(tag_list)):
-        for j in range(len(sentence) - 1):
-            node_score = nodeScorePercentage.get(tag_list[i]).get(sentence[j + 1][0])
+    # Viterbi score for every other word
+    for j in range(len(sentence) - 1):
+        for i in range(len(tag_list)):
+            node_score = node_scores.get(tag_list[i]).get(sentence[j + 1])
             if node_score is None:
-                node_score = 1
-            max_current = 0
+                node_score = 1 / (1 + word_count)
+            max_current = -100000000000000000
+            index_origin = -1
             for k in range(len(tag_list)):
-                node_score_before = nodeScorePercentage.get(tag_list[k]).get(sentence[j][0])  # node score before
-                if node_score_before is None:
-                    node_score_before = 1
-                transition_score = transition_tags[k][i]  # not sure
-                if transition_score == 0:
-                    transition_score = 1
-                curr_score = np.log(node_score_before) + np.log(transition_score)
+                node_score_before = viterbi_matrix[k][j][0]
+                transition_score = transition_scores[k][i]
+                curr_score = node_score_before + np.log(transition_score)
                 if curr_score > max_current:
                     max_current = curr_score
-            viterbi_mat[i][j + 1] = max_current + np.log(node_score)
+                    index_origin = k
+            viterbi_matrix[i][j + 1] = [max_current + np.log(node_score), index_origin]
 
-    max_prob = 0
+    return viterbi_matrix
+
+
+def calculate_best_tag_combination(sentence: List[str], tag_list: List[str], viterbi_matrix: List[List[List[int]]])\
+        -> List[str]:
+    max_prob = -10000000000000
     last_i = -1
     for i in range(len(tag_list)):
-        if viterbi_mat[i][len(sentence)-1] > max_prob:
-            max_prob = viterbi_mat[i][len(sentence)-1]
-            last_i = 1
+        curr_prob = viterbi_matrix[i][len(sentence) - 1][0]
+        if curr_prob > max_prob:
+            last_i = i
+            max_prob = curr_prob
+
+    best_tag_combination = [tag_list[last_i]]  # sequence with solution tags reversed
+    for j in range(len(sentence) - 1, 0, -1):
+        index_before = viterbi_matrix[last_i][j][1]
+        best_tag_combination.append(tag_list[index_before])
+        last_i = index_before
+
+    best_tag_combination.reverse()  # sequence with solution tags
+
+    return best_tag_combination
+
+
+def calculate_viterbi_score(viterbi_matrix: List[List[List[int]]], tag_list: List[str], sentence: List[str]) -> float:
+    max_prob = -10000000000000
 
     for i in range(len(tag_list)):
-        line = ""
-        for j in range(len(sentence)):
-            # line += i.__str__() + "|" + j.__str__() + ": " + viterbi_mat[i][j].__str__() + " "
-            line += viterbi_mat[i][j].__str__() + " "
-        print(line)
-    print(max_prob.__str__() + " " + last_i.__str__())
-    # print(nodeScorePercentage)
-    print(sentences[0])
+        curr_prob = viterbi_matrix[i][len(sentence) - 1][0]
+        if curr_prob > max_prob:
+            max_prob = curr_prob
 
-    #viterbi(sentences[0], tag_list, 5, 5, aPrioriPercentage)
+    return max_prob
 
-    print("End of Markov")
+
+# Main method
+if __name__ == '__main__':
+    print("Hi from Markov :)")
+
+    # Add parser to read command line arguments
+    parser = argparse.ArgumentParser(description='Train a hidden markov model')
+    parser.add_argument('command',
+                        help='Either call "train" or "classify". '
+                             'Train needs a training data file and a model .zip file to save.'
+                             'Classify needs valid model file.')
+    parser.add_argument('arg1',
+                        help='Using Train: Path to a txt file containing the text for training the model.\n'
+                             'Using Classify: Path to the trained model file')
+    parser.add_argument('arg2',
+                        help='Using Train: Path to a .zip file to save the trained model\n'
+                             'Using Classify: The sentence to be classified')
+    args = parser.parse_args()
+
+    if args.command == "train":
+        trainmodel(args.arg1, args.arg2)
+    elif args.command == "classify":
+        # zipObj.extractall()
+        with ZipFile(args.arg1, 'r') as modelzip:
+            with modelzip.open("model.json") as modeljson:
+                model_dictionary = json.load(modeljson)
+        classify(args.arg2, model_dictionary["tag_list"], model_dictionary["node_scores"], model_dictionary["transition_scores"], model_dictionary["apriori"], model_dictionary["word_count"])
+
+    print("End of Markov ^^")

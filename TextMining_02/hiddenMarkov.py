@@ -245,9 +245,9 @@ def classify(sentence: str, tag_list: List[str], node_scores: DefaultDict[str, D
     # Calculate Viterbi Score
     viterbi_score = calculate_viterbi_score(viterbi_matrix, tag_list, sentence)
 
-    print("Reference: " + sentence.__str__())
-    print("Our Solution: " + best_track.__str__())
-    print("Our max_prob: " + viterbi_score.__str__())
+    print("Reference: " + str(sentence))
+    print("Our Solution: " + str(best_track))
+    print("Our max_prob: " + str(viterbi_score))
 
 
 def calculate_viterbi_matrix(sentence: List[str], tag_list: List[str], node_scores: DefaultDict[str, DefaultDict[str, Union[float, int]]],
